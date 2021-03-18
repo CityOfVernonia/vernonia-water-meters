@@ -1,0 +1,25 @@
+.cov-water-meters {
+  width: 360px;
+  background-color: var(--calcite-ui-background);
+
+  calcite-tab {
+    width: 100%;
+    padding: 1rem 0.75rem;
+  }
+}
+
+.cov-water-meters--heading {
+  font-weight: 500;
+  margin-bottom: 0.75rem;
+}
+
+.cov-water-meters--row {
+  display: flex;
+  flex-flow: row;
+}
+
+.cov-water-meters--info {
+  calcite-button {
+    margin-top: 0.75rem;
+  }
+}

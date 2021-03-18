@@ -15,8 +15,8 @@ const path = require('path');
  */
 
 // Application information.
-const title = 'Mist Drive';
-const description = 'City of Vernonia ArcGIS JavaScript template application.';
+const title = 'Water Meters';
+const description = 'City of Vernonia water meters.';
 const themeColor = '#FFFFFF';
 const deployUrl = 'https://oregon-american-mill.netlify.app';
 const appImageUrl = 'socialcard.png';
