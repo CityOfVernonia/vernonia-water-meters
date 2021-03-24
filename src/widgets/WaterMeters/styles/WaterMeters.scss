@@ -1,5 +1,5 @@
 .cov-water-meters {
-  width: 360px;
+  width: 300px;
   background-color: var(--calcite-ui-background);
 
   calcite-tab {
@@ -8,18 +8,26 @@
   }
 }
 
-.cov-water-meters--heading {
-  font-weight: 500;
-  margin-bottom: 0.75rem;
-}
+.cov-water-meters--popup--table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
 
-.cov-water-meters--row {
-  display: flex;
-  flex-flow: row;
-}
+  tr:nth-child(odd) {
+    background-color: #f3f3f3;
+  }
 
-.cov-water-meters--info {
-  calcite-button {
-    margin-top: 0.75rem;
+  tr:nth-child(even) {
+    background-color: rgba(#f3f3f3, 0.5);
+  }
+
+  th {
+    border-right: 3px solid rgba(#cacaca, 0.25);
+    font-weight: 500;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 0.5rem;
   }
 }

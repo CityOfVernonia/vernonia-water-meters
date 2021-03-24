@@ -5,24 +5,96 @@ import { renderable, tsx } from '@arcgis/core/widgets/support/widget';
 
 import Widget from '@arcgis/core/widgets/Widget';
 
+import PopupTemplate from '@arcgis/core/PopupTemplate';
+import CustomContent from '@arcgis/core/popup/content/CustomContent';
+
 import SearchViewModel from '@arcgis/core/widgets/Search/SearchViewModel';
 
-export interface WaterMetersProperties extends esri.WidgetProperties {
+interface WaterMetersProperties extends esri.WidgetProperties {
   view: esri.MapView;
+  layer: esri.FeatureLayer;
+}
+
+interface WaterMeterInfoProperties extends esri.WidgetProperties {
+  graphic: esri.Graphic;
   layer: esri.FeatureLayer;
 }
 
 const CSS = {
   base: 'cov-water-meters',
 
-  heading: 'cov-water-meters--heading',
-
-  row: 'cov-water-meters--row',
-
-  info: 'cov-water-meters--info',
+  // popup custom content
+  popup: 'cov-water-meters--popup',
+  table: 'cov-water-meters--popup--table',
 };
 
 let KEY = 0;
+
+/**
+ * custom popup content
+ */
+@subclass('WaterMeterInfo')
+class WaterMeterInfo extends Widget {
+  @property()
+  graphic!: esri.Graphic;
+
+  @property()
+  layer!: esri.FeatureLayer;
+
+  @property()
+  private accountDomain!: esri.CodedValueDomain;
+
+  constructor(properties?: WaterMeterInfoProperties) {
+    super(properties);
+    whenOnce(this, 'layer.loaded', () => {
+      this.accountDomain = this.layer.getFieldDomain('ACCT_TYPE') as esri.CodedValueDomain;
+    });
+  }
+
+  render(): tsx.JSX.Element {
+    const { graphic, accountDomain } = this;
+    const {
+      attributes: { WSC_TYPE, ACCT_TYPE, METER_SIZE_T, METER_SN, METER_REG_SN, METER_AGE },
+    } = graphic;
+
+    const acctType = accountDomain.codedValues.filter((codedValue: any) => {
+      return codedValue.code === ACCT_TYPE;
+    })[0].name;
+
+    return (
+      <div class={CSS.popup}>
+        <table class={CSS.table}>
+          <tr>
+            <th>Service Type</th>
+            <td>{WSC_TYPE}</td>
+          </tr>
+          <tr>
+            <th>Account Type</th>
+            <td>{acctType}</td>
+          </tr>
+          <tr>
+            <th>Meter Size</th>
+            <td>{METER_SIZE_T}"</td>
+          </tr>
+          <tr>
+            <th>Serial No.</th>
+            <td>{METER_SN}</td>
+          </tr>
+          {METER_REG_SN ? (
+            <tr>
+              <th>Register No.</th>
+              <td>{METER_REG_SN}</td>
+            </tr>
+          ) : null}
+          <tr>
+            <th>Meter Age</th>
+            <td>{METER_AGE} years</td>
+          </tr>
+        </table>
+      </div>
+    );
+  }
+}
 
 @subclass('cov.widgets.WaterMeters')
 export default class WaterMeters extends Widget {
@@ -30,29 +102,11 @@ export default class WaterMeters extends Widget {
   view!: esri.MapView | esri.SceneView;
 
   @property()
-  @renderable([
-    'layer.labelsVisible'
-  ])
+  @renderable(['layer.labelsVisible'])
   layer!: esri.FeatureLayer;
 
   @property()
-  private _layerView!: esri.FeatureLayerView;
-
-  @property()
   private _searchViewModel!: SearchViewModel;
-
-  @property()
-  private _accountDomain!: esri.CodedValueDomain;
-
-  @property()
-  @renderable()
-  private _feature!: esri.Graphic | null;
-
-  @property()
-  private _featureInfo: tsx.JSX.Element | null = null;
-
-  @property()
-  private _highlight!: esri.Handle;
 
   constructor(properties?: WaterMetersProperties) {
     super(properties);
@@ -78,23 +132,24 @@ export default class WaterMeters extends Widget {
           if (view.scale > 20000) view.scale = 20000;
         });
       });
-    layer.popupEnabled = false;
     layer.outFields = ['*'];
 
-    // get account type domain
-    this._accountDomain = layer.getFieldDomain('ACCT_TYPE') as esri.CodedValueDomain;
-
-    // get layer view
-    view.whenLayerView(layer).then((laverView: esri.FeatureLayerView): void => {
-      this._layerView = laverView;
+    layer.popupTemplate = new PopupTemplate({
+      title: '{WSC_ID} - {ADDRESS}',
+      content: [
+        new CustomContent({
+          outFields: ['*'],
+          creator: (evt: any) => {
+            return new WaterMeterInfo({
+              graphic: evt.graphic,
+              layer,
+            });
+          },
+        }),
+      ],
     });
 
-    // click hit test
-    view.on('click', (point: esri.ScreenPoint): void => {
-      view.hitTest(point).then(this._hitTest.bind(this));
-    });
-
-    // init search
+    // init search view model
     this._searchViewModel = new SearchViewModel({
       includeDefaultSources: false,
       sources: [
@@ -109,38 +164,10 @@ export default class WaterMeters extends Widget {
     });
   }
 
-  /**
-   * hit test callback
-   * @param response 
-   * @returns 
-   */
-  private _hitTest(response: esri.HitTestResult): void {
-    const { layer, _layerView } = this;
-    const { results } = response;
-
-    this._clearFeature();
-
-    if (!results.length) return;
-
-    const filter = results.filter((value: esri.HitTestResultResults) => {
-      return value.graphic.layer === layer;
-    });
-
-    if (filter[0] && filter[0].graphic) {
-      this._feature = filter[0].graphic;
-      this._highlight = _layerView.highlight(this._feature);
-      this._createFeatureInfo();
-    }
-  }
-
-  @property()
-  @renderable()
-  private _searchResponse!: esri.SuggestResponse;
-
   @property()
   private _controller: AbortController | null = null;
 
-  private _cancelSearch(): void {
+  private _cancelSuggest(): void {
     const { _controller } = this;
     if (_controller) {
       _controller.abort();
@@ -148,29 +175,46 @@ export default class WaterMeters extends Widget {
     }
   }
 
-  private _search(evt: Event): void {
-    this._cancelSearch();
+  @property()
+  private _suggestions: tsx.JSX.Element[] = [];
 
-    const target = evt.target as HTMLInputElement;
-    const { value } = target;
-    const { layer, _searchViewModel } = this;
+  private _suggest(value: string): void {
+    this._cancelSuggest();
+
+    if (!value) {
+      this._suggestions = [];
+      return;
+    }
+
+    const { _searchViewModel } = this;
 
     const controller = new AbortController();
     const { signal } = controller;
 
     this._controller = controller;
 
-    // @ts-ignore
-    _searchViewModel.suggest(value, null, { signal })
+    _searchViewModel
+      // @ts-ignore
+      .suggest(value, null, { signal })
       .then((suggestResponse: esri.SuggestResponse) => {
         if (this._controller !== controller) {
           return;
         }
         this._controller = null;
 
-        // console.log(suggestResponse);
+        if (!suggestResponse.numResults) {
+          return;
+        }
 
-        this._searchResponse = suggestResponse;
+        this._suggestions = suggestResponse.results[0].results.map((result: esri.SuggestResult) => {
+          return (
+            <calcite-pick-list-item
+              key={KEY++}
+              label={result.text}
+              onclick={this._selectFeature.bind(this, result)}
+            ></calcite-pick-list-item>
+          );
+        });
       })
       .catch(() => {
         if (this._controller !== controller) {
@@ -180,24 +224,35 @@ export default class WaterMeters extends Widget {
       });
   }
 
-  private _clearFeature(): void {
-    const { _feature, _featureInfo, _highlight } = this;
-    if (_highlight) _highlight.remove();
-    if (_feature) this._feature = null;
-    if (_featureInfo) this._featureInfo = null;
+  private _selectFeature(result: esri.SuggestResult) {
+    const {
+      view,
+      view: { popup },
+      _searchViewModel,
+    } = this;
+
+    _searchViewModel.search(result).then((searchResponse: esri.SearchViewModelSearchResponse) => {
+      // roll the dice this always returns a result
+      const feature = searchResponse.results[0].results[0].feature;
+      popup.open({
+        features: [feature],
+      });
+      view.goTo(feature.geometry);
+      view.scale = 1200;
+    });
   }
 
   render(): tsx.JSX.Element {
-    const { layer, _feature } = this;
+    // const { layer } = this;
     return (
       <div class={CSS.base}>
         <calcite-tabs layout="center">
           <calcite-tab-nav slot="tab-nav">
-            <calcite-tab-title active="">Meter</calcite-tab-title>
-            <calcite-tab-title>Visualization</calcite-tab-title>
+            <calcite-tab-title active="">Search</calcite-tab-title>
+            <calcite-tab-title>Visualize</calcite-tab-title>
             <calcite-tab-title>Labels</calcite-tab-title>
           </calcite-tab-nav>
-          <calcite-tab active="">{_feature ? this._featureInfo : this._renderSearch()}</calcite-tab>
+          <calcite-tab active="">{this._renderSearch()}</calcite-tab>
           <calcite-tab>Change how the layer looks.....</calcite-tab>
           <calcite-tab>{this._renderLabeling()}</calcite-tab>
         </calcite-tabs>
@@ -208,103 +263,28 @@ export default class WaterMeters extends Widget {
   private _renderSearch(): tsx.JSX.Element {
     return (
       <div>
-        <small>Search by service id or address, or select a meter in the map.</small>
-        <calcite-input
-          scale="s"
-          placeholder="Service id or address"
-          oninput={this._search.bind(this)}
-        ></calcite-input>
-        {
-          this._renderSearchResult()
-        }
+        <calcite-value-list
+          filter-enabled=""
+          filter-placeholder="Search by service id or address"
+          bind={this}
+          oninput={(event: any) => {
+            this._suggest(event.path[0].value);
+          }}
+        >
+          {this._suggestions}
+        </calcite-value-list>
       </div>
     );
   }
 
-  private _renderSearchResult(): tsx.JSX.Element | null {
-    const { _searchResponse } = this;
-
-    if (!_searchResponse || !_searchResponse.numResults) return null;
-
-    const items = _searchResponse.results[0].results.map((result: esri.SuggestResult) => {
-      return (
-        <li key={KEY++}>{result.text}</li>
-      );
-    });
-
-    return (<ul key={KEY++}>{items}</ul>);
-  }
-
-
-
-  private _createFeatureInfo(): void {
-    const { _accountDomain } = this;
-    const feature = this._feature as esri.Graphic;
-    const { attributes } = feature;
-
-    const acct_type = _accountDomain.codedValues.filter((codedValue: any) => {
-      return codedValue.code === attributes.ACCT_TYPE;
-    });
-
-    this._featureInfo = (
-      <div key={KEY++} class={CSS.info}>
-        <div class={CSS.heading}>
-          {attributes.WSC_ID} - {attributes.ADDRESS || 'No Address'}
-        </div>
-        <table class="esri-widget__table">
-          <tr>
-            <th class="esri-feature__field-header">Account Type</th>
-            <td class="esri-feature__field-data">{acct_type[0].name}</td>
-          </tr>
-          <tr>
-            <th class="esri-feature__field-header">Service Type</th>
-            <td class="esri-feature__field-data">{attributes.WSC_TYPE}</td>
-          </tr>
-          <tr>
-            <th class="esri-feature__field-header">Meter Size</th>
-            <td class="esri-feature__field-data">{attributes.METER_SIZE_T}"</td>
-          </tr>
-          <tr>
-            <th class="esri-feature__field-header">Meter S/N:</th>
-            <td class="esri-feature__field-data">{attributes.METER_SN}</td>
-          </tr>
-          {attributes.METER_REG_SN ? (
-            <tr>
-              <th class="esri-feature__field-header">Meter Register No.</th>
-              <td class="esri-feature__field-data">{attributes.METER_REG_SN}</td>
-            </tr>
-          ) : null}
-          <tr>
-            <th class="esri-feature__field-header">Meter Age</th>
-            <td class="esri-feature__field-data">{attributes.METER_AGE} years</td>
-          </tr>
-        </table>
-        <calcite-button scale="s" icon-start="x" onclick={this._clearFeature.bind(this)}>
-          Clear
-        </calcite-button>
-      </div>
-    );
-  }
-
+  /**
+   * render labeling controls
+   */
   private _renderLabeling(): tsx.JSX.Element {
     const { layer } = this;
     return (
       <div>
-        <calcite-label>
-          Show Labels
-          <calcite-switch
-            scale="s"
-            switched={layer.labelsVisible}
-            bind={this}
-            afterCreate={(labelSwitch: HTMLCalciteSwitchElement) => {
-              labelSwitch.addEventListener('calciteSwitchChange', (evt: any) => {
-                layer.labelsVisible = evt.detail.switched;
-              });
-            }}
-          ></calcite-switch>
-        </calcite-label>
-
-        <calcite-label>
+        <calcite-label scale="s">
           Label
           <calcite-select
             scale="s"
@@ -325,6 +305,20 @@ export default class WaterMeters extends Widget {
             <calcite-option value="METER_REG_SN">Register No.</calcite-option>
             <calcite-option value="METER_SIZE_T">Meter Size</calcite-option>
           </calcite-select>
+        </calcite-label>
+
+        <calcite-label scale="s">
+          Show Labels
+          <calcite-switch
+            scale="s"
+            switched={layer.labelsVisible}
+            bind={this}
+            afterCreate={(labelSwitch: HTMLCalciteSwitchElement) => {
+              labelSwitch.addEventListener('calciteSwitchChange', (evt: any) => {
+                layer.labelsVisible = evt.detail.switched;
+              });
+            }}
+          ></calcite-switch>
         </calcite-label>
       </div>
     );

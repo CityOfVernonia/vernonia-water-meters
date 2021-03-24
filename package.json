@@ -1,4 +1,15 @@
 {
+  "name": "vernonia-water-meters",
+  "version": "0.0.1",
+  "description": "City of Vernonia water meters.",
+  "author": {
+    "name": "COV-GIS",
+    "url": "https://www.vernonia-or.gov"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CityOfVernonia/vernonia-water-meters.git"
+  },
   "license": "MIT",
   "dependencies": {
     "@arcgis/core": "^4.18.1",

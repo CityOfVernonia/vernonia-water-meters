@@ -18,7 +18,7 @@ const path = require('path');
 const title = 'Water Meters';
 const description = 'City of Vernonia water meters.';
 const themeColor = '#FFFFFF';
-const deployUrl = 'https://oregon-american-mill.netlify.app';
+const deployUrl = 'https://vernonia-water-meters.netlify.app';
 const appImageUrl = 'socialcard.png';
 
 // HTML plugin options for index.ejs. Primarily for title and meta tags.
