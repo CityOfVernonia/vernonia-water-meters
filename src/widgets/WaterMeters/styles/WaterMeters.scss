@@ -8,6 +8,19 @@
   }
 }
 
+.cov-water-meters--export-results {
+  div {
+    display: flex;
+    flex-flow: row;
+    align-items: center;
+    margin-top: 1rem;
+  }
+}
+
+.cov-water-meters--icon {
+  margin-right: 0.5rem;
+}
+
 .cov-water-meters--popup--table {
   width: 100%;
   border-collapse: collapse;

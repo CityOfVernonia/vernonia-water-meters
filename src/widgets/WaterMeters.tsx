@@ -9,10 +9,13 @@ import PopupTemplate from '@arcgis/core/PopupTemplate';
 import CustomContent from '@arcgis/core/popup/content/CustomContent';
 
 import SearchViewModel from '@arcgis/core/widgets/Search/SearchViewModel';
+import PrintViewModel from '@arcgis/core/widgets/Print/PrintViewModel';
+import PrintTemplate from '@arcgis/core/tasks/support/PrintTemplate';
 
 interface WaterMetersProperties extends esri.WidgetProperties {
   view: esri.MapView;
   layer: esri.FeatureLayer;
+  printServiceUrl: string;
 }
 
 interface WaterMeterInfoProperties extends esri.WidgetProperties {
@@ -22,6 +25,11 @@ interface WaterMeterInfoProperties extends esri.WidgetProperties {
 
 const CSS = {
   base: 'cov-water-meters',
+
+  exportResults: 'cov-water-meters--export-results',
+
+  icon: 'cov-water-meters--icon',
+  spin: 'esri-rotating',
 
   // popup custom content
   popup: 'cov-water-meters--popup',
@@ -106,7 +114,13 @@ export default class WaterMeters extends Widget {
   layer!: esri.FeatureLayer;
 
   @property()
+  printServiceUrl!: string;
+
+  @property()
   private _searchViewModel!: SearchViewModel;
+
+  @property()
+  private _printer = new PrintViewModel();
 
   constructor(properties?: WaterMetersProperties) {
     super(properties);
@@ -117,7 +131,7 @@ export default class WaterMeters extends Widget {
    * initialize props and widget
    */
   private _init(): void {
-    const { view, layer } = this;
+    const { view, layer, printServiceUrl, _printer } = this;
 
     // zoom to and setup layer props
     layer
@@ -162,6 +176,10 @@ export default class WaterMeters extends Widget {
         },
       ],
     });
+
+    // init print view model
+    _printer.view = view as esri.MapView;
+    _printer.printServiceUrl = printServiceUrl;
   }
 
   @property()
@@ -249,12 +267,12 @@ export default class WaterMeters extends Widget {
         <calcite-tabs layout="center">
           <calcite-tab-nav slot="tab-nav">
             <calcite-tab-title active="">Search</calcite-tab-title>
-            <calcite-tab-title>Visualize</calcite-tab-title>
             <calcite-tab-title>Labels</calcite-tab-title>
+            <calcite-tab-title>Export</calcite-tab-title>
           </calcite-tab-nav>
           <calcite-tab active="">{this._renderSearch()}</calcite-tab>
-          <calcite-tab>Change how the layer looks.....</calcite-tab>
           <calcite-tab>{this._renderLabeling()}</calcite-tab>
+          <calcite-tab>{this._renderExport()}</calcite-tab>
         </calcite-tabs>
       </div>
     );
@@ -320,6 +338,91 @@ export default class WaterMeters extends Widget {
             }}
           ></calcite-switch>
         </calcite-label>
+      </div>
+    );
+  }
+
+  @property()
+  private _exportCount = 1;
+
+  @property()
+  private _exports: { state: 'printing' | 'complete' | 'error'; titleText: string; url: string }[] = [];
+
+  private _export(): void {
+    const { _printer, _exports } = this;
+
+    const _export: { state: 'printing' | 'complete' | 'error'; titleText: string; url: string } = {
+      state: 'printing',
+      titleText: `Vernonia Water Meters (${this._exportCount})`,
+      url: '',
+    };
+
+    this._exportCount = this._exportCount + 1;
+
+    _exports.push(_export);
+
+    _printer
+      .print(
+        new PrintTemplate({
+          format: 'pdf',
+          layout: 'letter-ansi-a-landscape',
+          layoutOptions: {
+            titleText: 'Vernonia Water Meters',
+          },
+        }),
+      )
+      .then((printResult: any) => {
+        _export.state = 'complete';
+        _export.url = printResult.url;
+      })
+      .catch(() => {
+        _export.state = 'error';
+      })
+      .then(this.scheduleRender.bind(this));
+  }
+
+  /**
+   * render export controls
+   */
+  private _renderExport(): tsx.JSX.Element {
+    return (
+      <div>
+        <calcite-button scale="s" width="full" onclick={this._export.bind(this)}>
+          Export Map
+        </calcite-button>
+
+        {this._exports.length ? (
+          <div class={CSS.exportResults}>
+            {this._exports.map(
+              (_export: { state: 'printing' | 'complete' | 'error'; titleText: string; url: string }) => {
+                const { state, titleText, url } = _export;
+                switch (state) {
+                  case 'printing':
+                    return (
+                      <div key={KEY++}>
+                        <calcite-icon class={this.classes(CSS.spin, CSS.icon)} icon="spinner" scale="s"></calcite-icon>
+                        {titleText}
+                      </div>
+                    );
+                  case 'complete':
+                    return (
+                      <div key={KEY++}>
+                        <calcite-icon class={CSS.icon} icon="download" scale="s"></calcite-icon>
+                        <a href={url} target="_blank">{titleText}</a>
+                      </div>
+                    );
+                  default:
+                    return (
+                      <div>
+                        <calcite-icon class={CSS.icon} icon="exclamationMarkCircle" scale="s"></calcite-icon>
+                        {titleText}
+                      </div>
+                    );
+                }
+              },
+            )}
+          </div>
+        ) : null}
       </div>
     );
   }

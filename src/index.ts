@@ -65,6 +65,8 @@ const app = new Vernonia({
       widget: new WaterMeters({
         view,
         layer: waterMeters,
+        printServiceUrl:
+          'https://gisportal.vernonia-or.gov/arcgis/rest/services/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task',
       }),
     },
   ],
