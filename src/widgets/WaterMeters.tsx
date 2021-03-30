@@ -226,11 +226,11 @@ export default class WaterMeters extends Widget {
 
         this._suggestions = suggestResponse.results[0].results.map((result: esri.SuggestResult) => {
           return (
-            <calcite-pick-list-item
+            <calcite-value-list-item
               key={KEY++}
               label={result.text}
               onclick={this._selectFeature.bind(this, result)}
-            ></calcite-pick-list-item>
+            ></calcite-value-list-item>
           );
         });
       })
@@ -240,6 +240,11 @@ export default class WaterMeters extends Widget {
         }
         this._controller = null;
       });
+  }
+
+  private _clearSuggestions(): void {
+    this._suggestions = [];
+    this.scheduleRender();
   }
 
   private _selectFeature(result: esri.SuggestResult) {
@@ -281,16 +286,29 @@ export default class WaterMeters extends Widget {
   private _renderSearch(): tsx.JSX.Element {
     return (
       <div>
-        <calcite-value-list
-          filter-enabled=""
-          filter-placeholder="Search by service id or address"
+        <calcite-input
+          scale="s"
+          type="text"
+          clearable=""
+          placeholder="Search by service id or address"
           bind={this}
-          oninput={(event: any) => {
-            this._suggest(event.path[0].value);
+          oninput={(inputEvent: InputEvent) => {
+            this._suggest((inputEvent.target as HTMLInputElement).value);
           }}
-        >
-          {this._suggestions}
-        </calcite-value-list>
+          onkeydown={(keyDownEvent: KeyboardEvent) => {
+            if (keyDownEvent.key === 'Escape') {
+              this._clearSuggestions();
+            }
+          }}
+          afterCreate={(calciteInput: HTMLCalciteInputElement) => {
+            calciteInput.addEventListener('calciteInputInput', (calciteInputEvent: any) => {
+              if (calciteInputEvent.target.value === '') {
+                this._clearSuggestions();
+              }
+            });
+          }}
+        ></calcite-input>
+        <calcite-value-list>{this._suggestions}</calcite-value-list>
       </div>
     );
   }
@@ -346,20 +364,23 @@ export default class WaterMeters extends Widget {
   private _exportCount = 1;
 
   @property()
-  private _exports: { state: 'printing' | 'complete' | 'error'; titleText: string; url: string }[] = [];
+  private _exports: tsx.JSX.Element[] = [];
 
   private _export(): void {
     const { _printer, _exports } = this;
 
-    const _export: { state: 'printing' | 'complete' | 'error'; titleText: string; url: string } = {
-      state: 'printing',
-      titleText: `Vernonia Water Meters (${this._exportCount})`,
-      url: '',
-    };
+    const titleText = `Vernonia Water Meters (${this._exportCount})`;
 
     this._exportCount = this._exportCount + 1;
 
-    _exports.push(_export);
+    _exports.push(
+      <li key={KEY++}>
+        <calcite-icon class={this.classes(CSS.spin, CSS.icon)} icon="spinner" scale="s"></calcite-icon>
+        {`Exporting`}
+      </li>,
+    );
+
+    const index = _exports.length - 1;
 
     _printer
       .print(
@@ -372,11 +393,22 @@ export default class WaterMeters extends Widget {
         }),
       )
       .then((printResult: any) => {
-        _export.state = 'complete';
-        _export.url = printResult.url;
+        _exports[index] = (
+          <li key={KEY++}>
+            <a href={printResult.url} target="_blank">
+              <calcite-icon class={CSS.icon} icon="download" scale="s"></calcite-icon>
+              {titleText}
+            </a>
+          </li>
+        );
       })
       .catch(() => {
-        _export.state = 'error';
+        _exports[index] = (
+          <li key={KEY++}>
+            <calcite-icon class={CSS.icon} icon="exclamationMarkCircle" scale="s"></calcite-icon>
+            Export Error
+          </li>
+        );
       })
       .then(this.scheduleRender.bind(this));
   }
@@ -390,39 +422,7 @@ export default class WaterMeters extends Widget {
         <calcite-button scale="s" width="full" onclick={this._export.bind(this)}>
           Export Map
         </calcite-button>
-
-        {this._exports.length ? (
-          <div class={CSS.exportResults}>
-            {this._exports.map(
-              (_export: { state: 'printing' | 'complete' | 'error'; titleText: string; url: string }) => {
-                const { state, titleText, url } = _export;
-                switch (state) {
-                  case 'printing':
-                    return (
-                      <div key={KEY++}>
-                        <calcite-icon class={this.classes(CSS.spin, CSS.icon)} icon="spinner" scale="s"></calcite-icon>
-                        {titleText}
-                      </div>
-                    );
-                  case 'complete':
-                    return (
-                      <div key={KEY++}>
-                        <calcite-icon class={CSS.icon} icon="download" scale="s"></calcite-icon>
-                        <a href={url} target="_blank">{titleText}</a>
-                      </div>
-                    );
-                  default:
-                    return (
-                      <div>
-                        <calcite-icon class={CSS.icon} icon="exclamationMarkCircle" scale="s"></calcite-icon>
-                        {titleText}
-                      </div>
-                    );
-                }
-              },
-            )}
-          </div>
-        ) : null}
+        <ul class={CSS.exportResults}>{this._exports}</ul>
       </div>
     );
   }
