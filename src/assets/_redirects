@@ -1,1 +1,3 @@
 # redirects
+
+/export/*  https://gisportal.vernonia-or.gov/arcgis/rest/directories/arcgisoutput/Utilities/PrintingTools_GPServer/:splat  200
