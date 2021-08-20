@@ -1,5 +1,4 @@
 node_modules
 dist
-coverage
-.vscode
-debug.log
+src/public/calcite
+src/core

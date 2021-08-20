@@ -1,26 +1,44 @@
+// import esri = __esri;
+
+// esri config and auth
 import esriConfig from '@arcgis/core/config';
 
+// loading screen
+import LoadingScreen from './core/widgets/LoadingScreen';
+
+// map, view and layers
 import Map from '@arcgis/core/Map';
 import MapView from '@arcgis/core/views/MapView';
-
 import Basemap from '@arcgis/core/Basemap';
 import BingMapsLayer from '@arcgis/core/layers/BingMapsLayer';
 import VectorTileLayer from '@arcgis/core/layers/VectorTileLayer';
 import FeatureLayer from '@arcgis/core/layers/FeatureLayer';
 
-import Vernonia from 'cov/Vernonia';
+// the viewer
+import Viewer from './core/Viewer';
 
-import WaterMeters from './widgets/WaterMeters';
+// widgets
+import WaterMeters from './core/widgets/WaterMeters';
 
+// app config and init loading screen
+const title = 'Water Meters';
+
+const loadingScreen = new LoadingScreen({
+  title,
+});
+
+// config portal and auth
 esriConfig.portalUrl = 'https://gisportal.vernonia-or.gov/portal';
 
+// layers
 const waterMeters = new FeatureLayer({
   portalItem: {
     id: '4cc4580f2af246a1964c394b38f648aa',
   },
-  minScale: 20000,
+  minScale: 24000,
 });
 
+// view
 const view = new MapView({
   map: new Map({
     basemap: new Basemap({
@@ -35,44 +53,42 @@ const view = new MapView({
           },
         }),
       ],
+      thumbnailUrl:
+        'https://gisportal.vernonia-or.gov/portal/sharing/rest/content/items/b6130a13beb74026b89960fbd424021f/info/thumbnail/thumbnail1579125721359.png?f=json',
     }),
     layers: [waterMeters],
+    ground: 'world-elevation',
   }),
   zoom: 15,
-  center: [-123.185, 45.859],
+  center: [-123.18291178267039, 45.8616094153766],
   constraints: {
     rotationEnabled: false,
   },
   popup: {
     dockEnabled: true,
-    collapseEnabled: false,
     dockOptions: {
       position: 'bottom-left',
       breakpoint: false,
-      buttonEnabled: false,
     },
   },
 });
 
-const app = new Vernonia({
+new Viewer({
   view,
-  title: 'Water Meters',
-  viewTitle: true,
-  widgets: [
-    {
-      placement: 'view',
-      position: 'top-right',
-      widget: new WaterMeters({
-        view,
-        layer: waterMeters,
-        printServiceUrl:
-          'https://gisportal.vernonia-or.gov/arcgis/rest/services/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task',
-      }),
-    },
-  ],
-  container: document.createElement('div'),
+  title,
+  includeHeader: false,
 });
 
-document.body.append(app.container);
+view.when(() => {
+  view.ui.add(
+    new WaterMeters({
+      view,
+      waterMeters,
+      printServiceUrl:
+        'https://gisportal.vernonia-or.gov/arcgis/rest/services/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task',
+    }),
+    'top-right',
+  );
 
-console.log(view);
+  loadingScreen.end();
+});
