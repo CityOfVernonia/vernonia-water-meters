@@ -15,7 +15,7 @@ import VectorTileLayer from '@arcgis/core/layers/VectorTileLayer';
 import FeatureLayer from '@arcgis/core/layers/FeatureLayer';
 
 // the viewer
-import Viewer from './core/Viewer';
+import Viewer from './core/layouts/Viewer';
 
 // widgets
 import WaterMeters from './core/widgets/WaterMeters';
